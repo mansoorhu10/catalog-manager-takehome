@@ -2,7 +2,7 @@
 
 **Candidate name:** Mansoor Syed
 **Date:** September 4, 2026
-**Time spent:** _Approximate hours_
+**Time spent:** 4 hours (lost 45 minutes to environment setup bugs)
 
 ---
 
@@ -11,10 +11,10 @@
 Check off what you finished:
 
 - [x] Task 1 — Create Product
-- [ ] Task 2 — Update Variant
+- [x] Task 2 — Update Variant
 - [x] Task 3 — Fix soft-delete bug
 - [ ] Task 4 — Loading & error states
-- [ ] Task 5 — Input validation
+- [x] Task 5 — Input validation
 
 ---
 
@@ -27,6 +27,8 @@ _Briefly describe the approach you took for each task. Mention any trade-offs yo
 Kept the create-product-form logic in `CreateProductPage.tsx` instead of extracting it into a seperate `CreateProductForm` component. As of now, only one page uses this form, so I believe it is alright to put the product form in the product page directly. Given the time constraints, I decided it would be easier now to wire in everything in the page itself. If required in the future, this could be refactored to extract out the form for reuse and instead use props. Also, I decided to make it so that when creating a product, the user can create multiple variants and add them at once. This was mainly for better UX so that the user would not have to create one variant with their product, and then later update or add on to the existing product just to add more variants. Additionally, I decided to do parts of task 5 while developing task 1 since it made more sense to save time by adding validation while I am creating the form and API endpoint.
 
 ### Task 2
+
+The API route's docstring for update mentioned that name/sku are optional update fields so I kept the full-contract server-side even though task 2's scope in README is limited strictly to price and inventory updates. I decided to build inline row-editing for the variants instead of a modal since building the modal would have to be from scratch since there aren't any existing modal components in the codebase. With inline-editing I can resuse the existing table structure. I decided to extract out loading the product into a function that is called when the component loads the first time with a useEffect as well as everytime the variants are updated since managing local state since it's simpler to implement given the time constraints. 
 
 ### Task 3
 
