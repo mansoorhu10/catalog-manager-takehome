@@ -38,6 +38,8 @@ To fix this bug, I noticed that there is an existing piece of code that shows ho
 
 ### Task 5
 
+All four validation rules (name required, SKU required + unique, price >= 0, inventory >= 0) were implemented incrementally as part of Tasks 1 and 2 rather than a seperate pass to save time and because I felt approaching those features with validation in mind made more sense. All rules are enforced server-side and client-side. The request shapes are small enough that trying to implement express-validator isn't worth it since there's very little duplication between creating and updating. Also, the existing code does manual inline checks, so adding a dependency does not some worth it currently. If the codebase already used a library I would follow that approach.
+
 ---
 
 ## What I'd improve with more time
