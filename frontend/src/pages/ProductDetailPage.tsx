@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, Package } from "lucide-react";
-import { fetchProduct, deleteProduct } from "@/lib/api";
+import { ArrowLeft, Pencil, Trash2, Package, Check, X } from "lucide-react";
+import { fetchProduct, deleteProduct, updateVariant } from "@/lib/api";
 import type { ProductDetail, Variant } from "@/types";
 import { formatPrice, cn } from "@/lib/utils";
 
@@ -10,12 +10,16 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const [product, setProduct] = useState<ProductDetail | null>(null);
 
-  useEffect(() => {
+  function loadProduct() {
     if (!id) return;
     fetchProduct(Number(id))
       .then((r) => r.json())
       .then(setProduct)
       .catch(console.error);
+  }
+
+  useEffect(() => {
+    loadProduct();
   }, [id]);
 
   // Delete handler — sends soft-delete request.
@@ -121,7 +125,7 @@ export default function ProductDetailPage() {
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
                 {product.variants.map((v) => (
-                  <VariantRow key={v.id} variant={v} />
+                  <VariantRow key={v.id} variant={v} onUpdated={loadProduct} />
                 ))}
               </tbody>
             </table>
@@ -134,10 +138,117 @@ export default function ProductDetailPage() {
 
 /* ------------------------------------------------------------------ */
 
-function VariantRow({ variant }: { variant: Variant }) {
+function VariantRow({ variant, onUpdated }: { variant: Variant; onUpdated: () => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [price, setPrice] = useState((variant.price_cents / 100).toFixed(2));
+  const [inventory, setInventory] = useState(variant.inventory_count.toString());
+  const[error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  
   const lowStock =
     variant.inventory_count > 0 && variant.inventory_count <= 10;
   const outOfStock = variant.inventory_count === 0;
+
+  function startEdit() {
+    setPrice((variant.price_cents / 100).toFixed(2));
+    setInventory(String(variant.inventory_count));
+    setError(null);
+    setIsEditing(true);
+  }
+
+  function cancelEdit() {
+    setIsEditing(false);
+    setError(null);
+  }
+
+  async function handleSave() {
+    const priceValue = parseFloat(price);
+    const inventoryValue = parseInt(inventory, 10);
+    if (price === "" || isNaN(priceValue) || priceValue < 0) {
+      setError("Price must be a number >= 0");
+      return;
+    }
+    if (inventory === "" || isNaN(inventoryValue) || inventoryValue < 0) {
+      setError("Inventory count must be a number >= 0");
+      return;
+    }
+
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await updateVariant(variant.id, {
+        price_cents: Math.round(priceValue * 100),
+        inventory_count: inventoryValue,
+      });
+
+      if (!res.ok) {
+        const body = await res.json();
+        setError(body.error || "Failed to update variant.");
+        return;
+      }
+      
+      setIsEditing(false);
+      onUpdated();
+    } catch {
+      setError("Network error - please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <tr className="border-b bg-muted/30">
+        <td className="p-4 align-middle font-mono text-xs">{variant.sku}</td>
+        <td className="p-4 align-middle font-medium">{variant.name}</td>
+        <td className="p-4 text-right align-middle">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </td>
+        <td className="p-4 text-right align-middle">
+          <input
+            type="number"
+            step="1"
+            min="0"
+            value={inventory}
+            onChange={(e) => setInventory(e.target.value)}
+            className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </td>
+        <td className="p-4 align-middle">
+          <div className="flex items-center justify-end gap-2">
+            {error && (
+              <span className="text-xs text-destructive">{error}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-300/50 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Check className="h-3 w-3" />
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="border-b transition-colors hover:bg-muted/50">
@@ -164,10 +275,7 @@ function VariantRow({ variant }: { variant: Variant }) {
       <td className="p-4 text-right align-middle">
         <button
           className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          onClick={() => {
-            // TODO: Open variant edit form / dialog
-            alert("Variant editing is not yet implemented.");
-          }}
+          onClick={startEdit}
         >
           <Pencil className="h-3 w-3" />
           Edit

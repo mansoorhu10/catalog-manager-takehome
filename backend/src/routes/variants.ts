@@ -42,6 +42,67 @@ router.put("/:id", (_req, res) => {
   // 2. Validate: price_cents >= 0, inventory_count >= 0, sku is unique (if changed)
   // 3. Update the variant in the database
   // 4. Return the updated variant
+
+  try {
+    const id = Number(_req.params.id);
+    const { name, sku, price_cents, inventory_count } = _req.body;
+
+    const existing = db
+      .prepare("SELECT * FROM variants WHERE id = ?")
+      .get(id) as Record<string, unknown> | undefined;
+
+    if (!existing) {
+      return res.status(404).json({ error: "Variant not found" });
+    }
+
+    if (price_cents !== undefined && (typeof price_cents !== "number" || price_cents < 0)) {
+      return res.status(400).json({ error: "price_cents must be a number >= 0" });
+    }
+    if (inventory_count !== undefined && (typeof inventory_count !== "number" || inventory_count < 0)) {
+      return res.status(400).json({ error: "inventory_count must be a number >= 0" });
+    }
+    if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+      return res.status(400).json({ error: "name must be a non-empty string" });
+    }
+    if (sku !== undefined) {
+      if (typeof sku !== "string" || !sku.trim()) {
+        return res.status(400).json({ error: "sku must be a non-empty string" });
+      }
+      const clash = db
+        .prepare("SELECT id FROM variants WHERE sku = ? and id != ?")
+        .get(sku.trim(), id);
+      if (clash) {
+        return res.status(400).json({ error: "SKU already exists" });
+      }
+    }
+
+    db.prepare(
+      `UPDATE variants
+      SET name = COALESCE(?, name),
+          sku = COALESCE(?, sku),
+          price_cents = COALESCE(?, price_cents),
+          inventory_count = COALESCE(?, inventory_count),
+          updated_at = datetime('now')
+        WHERE id = ?`
+    ).run(
+      name?.trim(),
+      sku?.trim(),
+      price_cents ?? null,
+      inventory_count ?? null,
+      id
+    );
+
+    const updated = db.prepare("SELECT * FROM variants WHERE id = ?").get(id);
+    res.json(updated);
+  
+  } catch (err: any) {
+    if (typeof err?.code === "string" && err.code.startsWith("SQLITE_CONSTRAINT")) {
+      return res.status(400).json({ error: "A variant SKU already exists" });
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).send(message);
+  }
+
   res.status(501).json({
     error: "Not implemented",
     hint: "Implement variant update with validation",
