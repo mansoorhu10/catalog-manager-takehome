@@ -48,6 +48,8 @@ _What would you add, refactor, or fix if you had another couple of hours?_
 
 The soft-delete bug could potentially affect the GET request by ID for products as well. If I had more time I would look into this and try to fix it. 
 
+Right now, the backend validation for inventory_count only checks if the number is >= 0 but not if the number itself is an integer, so a POST request with a fraction as the inventory gets through. There isn't a specification for checking for integers, but I believe it should be explicitly checked for assuming it aligns with the intended use of ineventory_count.
+
 ---
 
 ## Anything else?
@@ -59,3 +61,11 @@ I would suggest improving delete confirmation from being an HTML alert to an act
 I think the "View" button on each product item is redundant and a simpler design that indicates that each product is clickable leads to a better UX experience where each product card is not overcrowded. Additionally, there are ways to improve accessibility for each product card without having to include the word "View" in the product card itself. 
 
 I noticed an edge case where trying to create a new product with a variant SKU that is the same of an SKU variant that was apart of a deleted product throws the unique SKU error. There could be a valid reason to keep variant SKUs in the database even if they are apart of a deleted product, since in the rea world, products may still keep their unique SKUs and freeing up an SKU might lead to conflicts later on. At the same time, a user who deletes a product and tries to re-create it with an SKU that is not attached to an existing product may get confused since there is no visible SKU variant that they can see attached to a different product. I decided against trying to fix this since it's not immediately clear whether it's intended or not.
+
+I would suggest adding frontend tests since the test-suite is currently only testing the backend. I would also add integration test coverage for forms that I created.
+
+I would add a 404 page route in `App.tsx` so that the user is at least informed with a not found page.
+
+Adding multiple pages to the products page could help with when it scales to a larger size.
+
+The products page automatically shows active and draft products in the same view, but I would add a toggle filter to only look at active or draft or both, with the default being to only look at active products.

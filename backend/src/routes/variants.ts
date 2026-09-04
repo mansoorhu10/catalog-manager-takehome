@@ -102,11 +102,6 @@ router.put("/:id", (_req, res) => {
     const message = err instanceof Error ? err.message : "Unknown error";
     res.status(500).send(message);
   }
-
-  res.status(501).json({
-    error: "Not implemented",
-    hint: "Implement variant update with validation",
-  });
 });
 
 /**
