@@ -113,10 +113,96 @@ router.post("/", (_req, res) => {
   // 2. Validate each variant (sku required + unique, price_cents >= 0, inventory_count >= 0)
   // 3. Insert product and variants inside a transaction
   // 4. Return the created product with its variants
-  res.status(501).json({
-    error: "Not implemented",
-    hint: "Implement product creation with validation and a database transaction",
-  });
+  try {
+    const { name, description, category_id, status, variants } = _req.body;
+
+    // Product validation
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Product name is required" });
+    }
+    if (!Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({ error: "At least one variant is required" });
+    }
+
+    // Per-variant validation
+    for (let i = 0; i < variants.length; i++) {
+      const variant = variants[i];
+      if (!variant.sku || typeof variant.sku !== "string" || !variant.sku.trim()) {
+        return res.status(400).json({ error: `Variant at index ${i} is missing a valid SKU` });
+      }
+      if (!variant?.name || typeof variant.name !== "string" || !variant.name.trim()) {
+        return res.status(400).json({ error: `Variant at index ${i} is missing a valid name` });
+      }
+      if (typeof variant.price_cents !== "number" || variant.price_cents < 0) {
+        return res.status(400).json({ error: `Variant at index ${i} has an invalid price (price_cents must be >= 0)` });
+      }
+      if (typeof variant.inventory_count !== "number" || variant.inventory_count < 0) {
+        return res.status(400).json({ error: `Variant at index ${i} has an invalid inventory count (inventory_count must be >= 0)` });
+      }
+    }
+
+    // SKU uniqueness check
+    const skus: string[] = variants.map((variant) => variant.sku.trim());
+    if (new Set(skus).size !== skus.length) {
+      return res.status(400).json({ error: "Duplicate SKUs found in variants" });
+    }
+    const placeholders = skus.map(() => "?").join(",");
+    const clashes = db
+      .prepare(`SELECT sku FROM variants WHERE sku IN (${placeholders})`)
+      .all(...skus);
+    if (clashes.length > 0) {
+      return res.status(400).json({ error: "One or more SKUs already exist in the database" });
+    }
+
+    // Insert product and variants in a transaction
+    const insertProduct = db.prepare(
+      `INSERT INTO products (name, description, category_id, status) VALUES (?, ?, ?, ?)`
+    );
+    const insertVariant = db.prepare(
+      `INSERT INTO variants (product_id, sku, name, price_cents, inventory_count) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    const createProductTx = db.transaction(() => {
+      const result = insertProduct.run(
+        name.trim(),
+        description ?? null,
+        category_id ?? null,
+        status ?? "active"
+      );
+      const productId = Number(result.lastInsertRowid);
+      for (const variant of variants) {
+        insertVariant.run(
+          productId,
+          variant.sku.trim(),
+          variant.name.trim(),
+          variant.price_cents,
+          variant.inventory_count
+        );
+      }
+        return productId;
+      });
+
+      const productId = createProductTx();
+
+      // Return with the expected shape
+      const product = db
+        .prepare(
+          `SELECT p.*, c.name AS category_name FROM products p
+          LEFT JOIN categories c on p.category_id = c.id WHERE p.id = ?`
+        )
+        .get(productId);
+      const createdVariants = db
+        .prepare(`SELECT * FROM variants WHERE product_id = ? ORDER BY created_at ASC`)
+        .all(productId);
+      
+      res.status(201).json({ ...(product as Record<string, unknown>), variants: createdVariants });
+    } catch (err: any) {
+      if (typeof err?.code === "string" && err.code.startsWith("SQLITE_CONSTRAINT")) {
+        return res.status(400).json({ error: "A variant SKU already exists" });
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).send(message);
+    }
 });
 
 /**
